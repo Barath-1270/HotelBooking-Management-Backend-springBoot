@@ -1,11 +1,28 @@
-# Use a base JDK image
-FROM openjdk:17-jdk-slim
+# === Stage 1: Build the application ===
+FROM maven:3.9.4-eclipse-temurin-17 AS build
 
-# Set working directory
 WORKDIR /app
 
-# Copy built JAR file
-COPY target/barathHotel-0.0.1-SNAPSHOT.jar app.jar
+# Copy pom.xml and download dependencies first (for better caching)
+COPY pom.xml .
+COPY .mvn .mvn
+COPY mvnw .
+RUN chmod +x mvnw
+RUN ./mvnw dependency:go-offline
 
-# Run the app
+# Copy the rest of the source code
+COPY src ./src
+
+# Package the app
+RUN ./mvnw clean package -DskipTests
+
+# === Stage 2: Run the application ===
+FROM openjdk:17-jdk-slim
+
+WORKDIR /app
+
+# Copy the JAR from the build stage
+COPY --from=build /app/target/*.jar app.jar
+
+# Start the app
 ENTRYPOINT ["java", "-jar", "app.jar"]
